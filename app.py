@@ -133,7 +133,8 @@ def analyze_readiness(row, checklist_cols):
                 missing_items.append(f"{col} ({int(current_score)}%)")
     return pd.Series([round(np.mean(scores)) if scores else 0, " | ".join(missing_items)])
 
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1pN31S92Xa4m-hilE-e56F9T6LuOhZLwPq6YWEnWP_xk/export?format=csv"
+# الرابط الجديد المحدث
+SHEET_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeLc_hzu18NMzwAdVAm5Rk2qk4oBmNnh4Z4P8F8g05LOLnCBw/viewform?usp=sharing&ouid=104994008626485786659"
 
 @st.cache_data(ttl=20)
 def load_data():
@@ -183,22 +184,19 @@ def show_tent_details(tent_id, full_df):
         for item in missing_list:
             st.markdown(f"<div class='checklist-item-popup'>❌ {item}</div>", unsafe_allow_html=True)
 
-# 4. 🆕 داشبورد أداء المواقع (بدلاً من المراقبين)
+# 4. داشبورد أداء المواقع
 def show_sites_dashboard(df_full, df_latest):
     st.markdown("<h2>📊 لوحة أداء المواقع</h2>", unsafe_allow_html=True)
 
-    # ===== حساب التقدم لكل موقع عبر الزمن =====
     sites_stats = []
     for site_id in df_latest['Unified_ID'].unique():
-        if site_id == "غير معرف":
-            continue
+        if site_id == "غير معرف": continue
         site_history = df_full[df_full['Unified_ID'] == site_id].copy()
         if 'dt_object' in site_history.columns:
             site_history = site_history.sort_values(by='dt_object', ascending=True)
 
         scores_over_time = site_history['Overall_Score'].tolist()
-        if not scores_over_time:
-            continue
+        if not scores_over_time: continue
 
         first_score = scores_over_time[0]
         latest_score = scores_over_time[-1]
@@ -208,22 +206,11 @@ def show_sites_dashboard(df_full, df_latest):
         max_score = max(scores_over_time)
         min_score = min(scores_over_time)
 
-        # تصنيف حالة التقدم
-        if improvement > 10:
-            trend = "📈 تحسن كبير"
-            trend_color = "#10b981"
-        elif improvement > 0:
-            trend = "🔼 تحسن طفيف"
-            trend_color = "#3b82f6"
-        elif improvement == 0:
-            trend = "➖ ثابت"
-            trend_color = "#9ca3af"
-        elif improvement > -10:
-            trend = "🔽 تراجع طفيف"
-            trend_color = "#f59e0b"
-        else:
-            trend = "📉 تراجع كبير"
-            trend_color = "#ef4444"
+        if improvement > 10: trend = "📈 تحسن كبير"; trend_color = "#10b981"
+        elif improvement > 0: trend = "🔼 تحسن طفيف"; trend_color = "#3b82f6"
+        elif improvement == 0: trend = "➖ ثابت"; trend_color = "#9ca3af"
+        elif improvement > -10: trend = "🔽 تراجع طفيف"; trend_color = "#f59e0b"
+        else: trend = "📉 تراجع كبير"; trend_color = "#ef4444"
 
         latest_row = site_history.iloc[-1]
         sites_stats.append({
@@ -248,206 +235,41 @@ def show_sites_dashboard(df_full, df_latest):
 
     stats_df = stats_df.sort_values('الأداء الحالي', ascending=False)
 
-    # ===== المؤشرات الرئيسية =====
-    total_sites = len(stats_df)
-    avg_current = round(stats_df['الأداء الحالي'].mean(), 1)
-    improved_sites = len(stats_df[stats_df['مقدار التحسن'] > 0])
-    declined_sites = len(stats_df[stats_df['مقدار التحسن'] < 0])
-    excellent_sites = len(stats_df[stats_df['الأداء الحالي'] >= 90])
-
     col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown(f'<div class="metric-card"><div class="metric-value">{total_sites}</div><div class="metric-label">إجمالي المواقع</div></div>', unsafe_allow_html=True)
-    with col2:
-        st.markdown(f'<div class="metric-card"><div class="metric-value">{avg_current}%</div><div class="metric-label">متوسط الأداء العام</div></div>', unsafe_allow_html=True)
-    with col3:
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#10b981">{improved_sites}</div><div class="metric-label">مواقع تحسنت</div></div>', unsafe_allow_html=True)
-    with col4:
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#ef4444">{declined_sites}</div><div class="metric-label">مواقع تراجعت</div></div>', unsafe_allow_html=True)
+    with col1: st.markdown(f'<div class="metric-card"><div class="metric-value">{len(stats_df)}</div><div class="metric-label">إجمالي المواقع</div></div>', unsafe_allow_html=True)
+    with col2: st.markdown(f'<div class="metric-card"><div class="metric-value">{round(stats_df["الأداء الحالي"].mean(), 1)}%</div><div class="metric-label">متوسط الأداء العام</div></div>', unsafe_allow_html=True)
+    with col3: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#10b981">{len(stats_df[stats_df["مقدار التحسن"] > 0])}</div><div class="metric-label">مواقع تحسنت</div></div>', unsafe_allow_html=True)
+    with col4: st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#ef4444">{len(stats_df[stats_df["مقدار التحسن"] < 0])}</div><div class="metric-label">مواقع تراجعت</div></div>', unsafe_allow_html=True)
 
     st.divider()
-
-    # ===== التحليل الذكي والملاحظات =====
     st.markdown("<h3>🧠 تحليلات ذكية</h3>", unsafe_allow_html=True)
+    i_col1, i_col2 = st.columns(2)
 
-    insights_col1, insights_col2 = st.columns(2)
-
-    with insights_col1:
-        # أفضل موقع متطور
+    with i_col1:
         top_improved = stats_df.nlargest(1, 'مقدار التحسن').iloc[0] if not stats_df.empty else None
         if top_improved is not None and top_improved['مقدار التحسن'] > 0:
-            st.markdown(f"""
-            <div class='high-achievement'>
-                <b>🏆 أكثر موقع تحسناً:</b> {top_improved['الموقع']}<br>
-                ارتفع من <b>{top_improved['أول تقييم']}%</b> إلى <b>{top_improved['الأداء الحالي']}%</b>
-                (تحسن +{top_improved['مقدار التحسن']}%)
-            </div>
-            """, unsafe_allow_html=True)
-
-        # أفضل موقع حالياً
+            st.markdown(f"<div class='high-achievement'><b>🏆 أكثر موقع تحسناً:</b> {top_improved['الموقع']}<br>تحسن بمقدار +{top_improved['مقدار التحسن']}%</div>", unsafe_allow_html=True)
         best_now = stats_df.iloc[0]
-        st.markdown(f"""
-        <div class='high-achievement'>
-            <b>⭐ أعلى موقع أداءً حالياً:</b> {best_now['الموقع']}<br>
-            بنسبة إنجاز <b>{best_now['الأداء الحالي']}%</b> ({best_now['الشركة']})
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div class='high-achievement'><b>⭐ أعلى موقع أداءً حالياً:</b> {best_now['الموقع']}<br>بنسبة إنجاز {best_now['الأداء الحالي']}%</div>", unsafe_allow_html=True)
 
-        # نسبة المواقع الممتازة
-        excellence_rate = round((excellent_sites / total_sites * 100) if total_sites > 0 else 0, 1)
-        st.markdown(f"""
-        <div class='insight-box'>
-            <b>📊 نسبة التميز:</b> {excellence_rate}% من المواقع تجاوزت 90%
-            ({excellent_sites} من أصل {total_sites})
-        </div>
-        """, unsafe_allow_html=True)
-
-    with insights_col2:
-        # أكثر موقع تراجعاً
+    with i_col2:
         top_declined = stats_df.nsmallest(1, 'مقدار التحسن').iloc[0] if not stats_df.empty else None
         if top_declined is not None and top_declined['مقدار التحسن'] < 0:
-            st.markdown(f"""
-            <div class='low-achievement'>
-                <b>⚠️ أكثر موقع تراجعاً:</b> {top_declined['الموقع']}<br>
-                انخفض من <b>{top_declined['أول تقييم']}%</b> إلى <b>{top_declined['الأداء الحالي']}%</b>
-                (تراجع {top_declined['مقدار التحسن']}%)
-            </div>
-            """, unsafe_allow_html=True)
-
-        # أقل موقع حالياً
+            st.markdown(f"<div class='low-achievement'><b>⚠️ أكثر موقع تراجعاً:</b> {top_declined['الموقع']}<br>تراجع بمقدار {top_declined['مقدار التحسن']}%</div>", unsafe_allow_html=True)
         worst_now = stats_df.iloc[-1]
-        st.markdown(f"""
-        <div class='low-achievement'>
-            <b>🚨 أقل موقع أداءً حالياً:</b> {worst_now['الموقع']}<br>
-            بنسبة إنجاز <b>{worst_now['الأداء الحالي']}%</b> - يحتاج لمتابعة عاجلة
-        </div>
-        """, unsafe_allow_html=True)
-
-        # إجمالي معدل التحسن
-        avg_improvement = round(stats_df['مقدار التحسن'].mean(), 1)
-        improvement_icon = "📈" if avg_improvement > 0 else "📉" if avg_improvement < 0 else "➖"
-        st.markdown(f"""
-        <div class='insight-box'>
-            <b>{improvement_icon} متوسط معدل التحسن:</b> {avg_improvement}%
-            عبر جميع المواقع منذ بداية المتابعة
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(f"<div class='low-achievement'><b>🚨 أقل موقع أداءً حالياً:</b> {worst_now['الموقع']}<br>بنسبة إنجاز {worst_now['الأداء الحالي']}%</div>", unsafe_allow_html=True)
 
     st.divider()
-
-    # ===== الرسوم البيانية =====
     col_chart1, col_chart2 = st.columns(2)
-
     with col_chart1:
-        # مخطط الأداء الحالي لكل موقع
-        fig = px.bar(
-            stats_df, x='الموقع', y='الأداء الحالي',
-            color='الأداء الحالي',
-            color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'],
-            title='الأداء الحالي لكل موقع',
-            text='الأداء الحالي'
-        )
-        fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white",
-            xaxis=dict(autorange="reversed"),
-            yaxis=dict(side="right"),
-            title=dict(x=0.5, xanchor='center')
-        )
+        fig = px.bar(stats_df, x='الموقع', y='الأداء الحالي', color='الأداء الحالي', color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'], title='الأداء الحالي لكل موقع')
+        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white", xaxis=dict(autorange="reversed"), yaxis=dict(side="right"), title=dict(x=0.5, xanchor='center'))
         st.plotly_chart(fig, use_container_width=True)
 
     with col_chart2:
-        # مخطط التحسن (إيجابي/سلبي)
-        improvement_df = stats_df.sort_values('مقدار التحسن', ascending=False)
-        fig2 = px.bar(
-            improvement_df, x='الموقع', y='مقدار التحسن',
-            color='مقدار التحسن',
-            color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'],
-            color_continuous_midpoint=0,
-            title='مقدار تحسن المواقع (مقارنة بأول تقييم)',
-            text='مقدار التحسن'
-        )
-        fig2.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white",
-            xaxis=dict(autorange="reversed"),
-            yaxis=dict(side="right"),
-            title=dict(x=0.5, xanchor='center')
-        )
+        fig2 = px.bar(stats_df.sort_values('مقدار التحسن'), x='الموقع', y='مقدار التحسن', color='مقدار التحسن', color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'], color_continuous_midpoint=0, title='مقدار تحسن المواقع')
+        fig2.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white", xaxis=dict(autorange="reversed"), yaxis=dict(side="right"), title=dict(x=0.5, xanchor='center'))
         st.plotly_chart(fig2, use_container_width=True)
-
-    # ===== مخطط التطور الزمني للمواقع =====
-    st.markdown("<h3>📈 تطور أداء المواقع عبر الزمن</h3>", unsafe_allow_html=True)
-
-    timeline_data = []
-    for site_id in df_latest['Unified_ID'].unique():
-        if site_id == "غير معرف":
-            continue
-        site_history = df_full[df_full['Unified_ID'] == site_id].copy()
-        if 'dt_object' in site_history.columns:
-            site_history = site_history.sort_values(by='dt_object', ascending=True)
-        for idx, (_, r) in enumerate(site_history.iterrows(), start=1):
-            timeline_data.append({
-                'الموقع': site_id,
-                'رقم الزيارة': idx,
-                'النسبة': r['Overall_Score'],
-                'التاريخ': r.get('طابع زمني', '-')
-            })
-
-    timeline_df = pd.DataFrame(timeline_data)
-    if not timeline_df.empty:
-        fig3 = px.line(
-            timeline_df, x='رقم الزيارة', y='النسبة', color='الموقع',
-            markers=True, title='تطور نسبة الإنجاز لكل موقع عبر الزيارات'
-        )
-        fig3.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white",
-            xaxis=dict(side="top"),
-            yaxis=dict(side="right"),
-            title=dict(x=0.5, xanchor='center'),
-            legend=dict(orientation="h", yanchor="bottom", y=-0.3)
-        )
-        st.plotly_chart(fig3, use_container_width=True)
-
-    # ===== توزيع حالات التقدم =====
-    col_chart3, col_chart4 = st.columns(2)
-
-    with col_chart3:
-        trend_counts = stats_df['حالة التقدم'].value_counts().reset_index()
-        trend_counts.columns = ['الحالة', 'العدد']
-        fig4 = px.pie(
-            trend_counts, values='العدد', names='الحالة',
-            title='توزيع المواقع حسب حالة التقدم',
-            color_discrete_sequence=['#10b981', '#3b82f6', '#9ca3af', '#f59e0b', '#ef4444']
-        )
-        fig4.update_layout(paper_bgcolor='rgba(0,0,0,0)', font_color="white", title=dict(x=0.5, xanchor='center'))
-        st.plotly_chart(fig4, use_container_width=True)
-
-    with col_chart4:
-        # مقارنة أول تقييم vs الحالي
-        compare_df = stats_df.head(15).melt(
-            id_vars=['الموقع'],
-            value_vars=['أول تقييم', 'الأداء الحالي'],
-            var_name='النوع', value_name='النسبة'
-        )
-        fig5 = px.bar(
-            compare_df, x='الموقع', y='النسبة', color='النوع',
-            barmode='group',
-            title='مقارنة أول تقييم مقابل الأداء الحالي',
-            color_discrete_map={'أول تقييم': '#9ca3af', 'الأداء الحالي': '#3b82f6'}
-        )
-        fig5.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white",
-            xaxis=dict(autorange="reversed"),
-            yaxis=dict(side="right"),
-            title=dict(x=0.5, xanchor='center')
-        )
-        st.plotly_chart(fig5, use_container_width=True)
-
-    # ===== جدول تفصيلي =====
-    st.markdown("<h3>📋 تقرير تفصيلي للمواقع</h3>", unsafe_allow_html=True)
-    display_df = stats_df[['الموقع', 'الشركة', 'الأداء الحالي', 'أول تقييم',
-                            'مقدار التحسن', 'متوسط الأداء', 'أعلى أداء', 'أقل أداء',
-                            'عدد الزيارات', 'حالة التقدم']]
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
 
 # 5. العرض الرئيسي
 try:
@@ -465,8 +287,7 @@ try:
                 avg = round(sub_df['Overall_Score'].mean())
                 c1.metric("متوسط الإنجاز", f"{avg}%")
                 fig = px.bar(sub_df, x='Unified_ID', y='Overall_Score', color_discrete_sequence=[color], text='Overall_Score')
-                fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white", 
-                                  xaxis=dict(autorange="reversed"), yaxis=dict(side="right"))
+                fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white", xaxis=dict(autorange="reversed"), yaxis=dict(side="right"))
                 c2.plotly_chart(fig, use_container_width=True)
 
     elif page == "🏕️ خريطة المواقع":
