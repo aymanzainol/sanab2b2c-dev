@@ -133,7 +133,7 @@ def analyze_readiness(row, checklist_cols):
                 missing_items.append(f"{col} ({int(current_score)}%)")
     return pd.Series([round(np.mean(scores)) if scores else 0, " | ".join(missing_items)])
 
-# الرابط الجديد المحدث
+# الرابط المحدث
 SHEET_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeLc_hzu18NMzwAdVAm5Rk2qk4oBmNnh4Z4P8F8g05LOLnCBw/viewform?usp=sharing&ouid=104994008626485786659"
 
 @st.cache_data(ttl=20)
