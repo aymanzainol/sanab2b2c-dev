@@ -54,10 +54,55 @@ st.markdown("""
         display: flex; align-items: center; justify-content: center;
         font-weight: bold; font-size: 1.2rem; color: #eab308;
     }
+
+    .metric-card {
+        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+        border-radius: 15px;
+        padding: 20px;
+        border: 1px solid #374151;
+        text-align: center;
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #3b82f6;
+    }
+    
+    .metric-label {
+        font-size: 1rem;
+        color: #9ca3af;
+        margin-top: 5px;
+    }
+    
+    .high-achievement {
+        background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+        border-radius: 12px;
+        padding: 15px;
+        border-right: 4px solid #10b981;
+        margin-bottom: 10px;
+    }
+    
+    .low-achievement {
+        background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+        border-radius: 12px;
+        padding: 15px;
+        border-right: 4px solid #ef4444;
+        margin-bottom: 10px;
+    }
+
+    .insight-box {
+        background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+        border-radius: 12px;
+        padding: 15px;
+        border-right: 4px solid #3b82f6;
+        margin-bottom: 10px;
+        color: #dbeafe !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. وظائف معالجة البيانات
+# 2. معالجة البيانات
 def analyze_readiness(row, checklist_cols):
     scores = []
     missing_items = []
@@ -83,35 +128,24 @@ def analyze_readiness(row, checklist_cols):
                 missing_items.append(f"{col} ({int(current_score)}%)")
     return pd.Series([round(np.mean(scores)) if scores else 0, " | ".join(missing_items)])
 
-# الرابط الخاص بك (تأكد أنه رابط Google Sheet وليس Form للتشغيل الفعلي)
-SHEET_URL = "https://docs.google.com/forms/d/e/1FAIpQLSeLc_hzu18NMzwAdVAm5Rk2qk4oBmNnh4Z4P8F8g05LOLnCBw/viewform?usp=sharing&ouid=104994008626485786659"
+# الرابط الجديد المحدث (بصيغة CSV لضمان القراءة الصحيحة)
+RAW_URL = "https://docs.google.com/spreadsheets/d/1nfOahkHuUnWdsh40f0E3WvIUqTC4phKUxraGSOKyuUs/edit?usp=sharing"
+SHEET_URL = RAW_URL.replace("/edit?usp=sharing", "/export?format=csv")
 
 @st.cache_data(ttl=20)
 def load_data():
+    # استخدام mangle_dupe_cols للتعامل مع أي تكرار مفاجئ في الأسماء
     df = pd.read_csv(SHEET_URL)
     df.columns = [col.strip().replace('\n', '') for col in df.columns]
     
-    # حل مشكلة "المراقب .1" - البحث عن أي عمود يحتوي على كلمة مراقب
+    # منطق مرن للتعرف على الأعمدة حتى لو تغيرت أسماؤها
     moraqeb_cols = [c for c in df.columns if 'المراقب' in c]
-    if moraqeb_cols:
-        df['Supervisor_Final'] = df[moraqeb_cols[0]].fillna("غير مسجل")
-        if len(moraqeb_cols) > 1: # إذا وجد أكثر من عمود للمراقب، قم بدمجهم
-            for col in moraqeb_cols[1:]:
-                df['Supervisor_Final'] = df['Supervisor_Final'].fillna(df[col])
-    else:
-        df['Supervisor_Final'] = "غير مسجل"
-
-    # حل مرن لرقم الشاخص
+    df['Supervisor_Final'] = df[moraqeb_cols[0]].fillna("غير مسجل") if moraqeb_cols else "غير مسجل"
+    
     shaخص_cols = [c for c in df.columns if 'رقم الشاخص' in c]
-    if shaخص_cols:
-        df['Unified_ID'] = df[shaخص_cols[0]].fillna("غير معرف")
-        if len(shaخص_cols) > 1:
-            for col in shaخص_cols[1:]:
-                df['Unified_ID'] = df['Unified_ID'].fillna(df[col])
-    else:
-        df['Unified_ID'] = "غير معرف"
-        
+    df['Unified_ID'] = df[shaخص_cols[0]].fillna("غير معرف") if shaخص_cols else "غير معرف"
     df['Unified_ID'] = df['Unified_ID'].astype(str).str.strip()
+    
     df['Assistant_Name'] = df['المعاون'].fillna("غير مسجل") if 'المعاون' in df.columns else "غير مسجل"
     
     if 'طابع زمني' in df.columns:
@@ -119,39 +153,102 @@ def load_data():
         df['dt_object'] = pd.to_datetime(df['temp_time'], errors='coerce')
         df = df.sort_values(by='dt_object', ascending=False)
     
-    # تحديد أعمدة التشيك ليست (أول 30 عمود بعد البيانات الأساسية)
     checklist_cols = df.columns[7:37] if len(df.columns) > 7 else []
     df[['Overall_Score', 'Missing_Details']] = df.apply(lambda row: analyze_readiness(row, checklist_cols), axis=1)
     df_latest = df.drop_duplicates(subset=['Unified_ID'], keep='first')
     return df, df_latest, checklist_cols
 
-# 3. واجهة العرض (تم اختصارها لضمان العمل)
+# 3. النافذة المنبثقة
+@st.dialog("تفاصيل جاهزية الموقع 🏕️")
+def show_tent_details(tent_id, full_df):
+    tent_history = full_df[full_df['Unified_ID'] == tent_id].copy()
+    st.markdown(f"<h3>موقع: {tent_id}</h3>", unsafe_allow_html=True)
+    history_options = tent_history['طابع زمني'].tolist()
+    selected_time = st.selectbox("🕒 عرض تقرير تاريخ:", history_options)
+    row = tent_history[tent_history['طابع زمني'] == selected_time].iloc[0]
+    score = int(row['Overall_Score'])
+    
+    st.markdown(f"""
+    <div class='observer-notes-box'>
+        <div class='score-circle'>{score}%</div>
+        <div>
+            <p><b>المعاون:</b> {row['Assistant_Name']}</p>
+            <p><b>المراقب:</b> {row['Supervisor_Final']}</p>
+            <hr>
+            <p><b>ملاحظات المراقب:</b></p>
+            <p>{row['ملاحظات المراقب'] if 'ملاحظات المراقب' in row and pd.notna(row['ملاحظات المراقب']) else 'لا توجد ملاحظات.'}</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# 4. داشبورد أداء المواقع
+def show_sites_dashboard(df_full, df_latest):
+    st.markdown("<h2>📊 لوحة أداء المواقع</h2>", unsafe_allow_html=True)
+    sites_stats = []
+    for site_id in df_latest['Unified_ID'].unique():
+        if site_id == "غير معرف": continue
+        site_history = df_full[df_full['Unified_ID'] == site_id].copy()
+        if 'dt_object' in site_history.columns:
+            site_history = site_history.sort_values(by='dt_object', ascending=True)
+
+        scores = site_history['Overall_Score'].tolist()
+        if not scores: continue
+        
+        improvement = scores[-1] - scores[0]
+        latest_row = site_history.iloc[-1]
+        
+        sites_stats.append({
+            'الموقع': site_id,
+            'الأداء الحالي': scores[-1],
+            'مقدار التحسن': round(improvement, 1),
+            'عدد الزيارات': len(scores),
+            'حالة التقدم': "📈 تحسن" if improvement > 0 else "📉 تراجع" if improvement < 0 else "➖ ثابت"
+        })
+
+    stats_df = pd.DataFrame(sites_stats).sort_values('الأداء الحالي', ascending=False)
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric("إجمالي المواقع", len(stats_df))
+    c2.metric("متوسط الأداء العام", f"{round(stats_df['الأداء الحالي'].mean(), 1)}%")
+    c3.metric("مواقع تحسنت", len(stats_df[stats_df['مقدار التحسن'] > 0]))
+
+    st.divider()
+    col_chart1, col_chart2 = st.columns(2)
+    with col_chart1:
+        fig = px.bar(stats_df, x='الموقع', y='الأداء الحالي', color='الأداء الحالي', title='الأداء الحالي لكل موقع')
+        fig.update_layout(xaxis=dict(autorange="reversed"), yaxis=dict(side="right"), paper_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig, use_container_width=True)
+    with col_chart2:
+        fig2 = px.bar(stats_df, x='الموقع', y='مقدار التحسن', color='مقدار التحسن', title='مقدار التحسن')
+        fig2.update_layout(xaxis=dict(autorange="reversed"), yaxis=dict(side="right"), paper_bgcolor='rgba(0,0,0,0)')
+        st.plotly_chart(fig2, use_container_width=True)
+
+# 5. العرض الرئيسي
 try:
     df_full, df_latest, checklist_cols = load_data()
     st.markdown("<h1>🚀 لوحة متابعة قطاع المشاعر</h1>", unsafe_allow_html=True)
-    
-    tab1, tab2, tab3 = st.tabs(["📊 التحليل العام", "🏕️ خريطة المواقع", "🏗️ أداء المواقع"])
+    page = st.radio("اختر العرض:", ["📊 التحليل العام", "🏕️ خريطة المواقع", "🏗️ أداء المواقع"], horizontal=True)
+    st.divider()
 
-    with tab1:
-        st.subheader("إحصائيات عامة")
-        avg_total = round(df_latest['Overall_Score'].mean())
-        st.metric("متوسط الجاهزية الكلي", f"{avg_total}%")
-        
-        fig = px.histogram(df_latest, x='Overall_Score', nbins=10, title="توزيع درجات الجاهزية", color_discrete_sequence=['#3b82f6'])
-        st.plotly_chart(fig, use_container_width=True)
+    if page == "📊 التحليل العام":
+        st.subheader("إحصائيات جاهزية الشركات")
+        # منطق عرض الشركات (سنا / ركين)
+        for company in df_latest['شركة'].unique() if 'شركة' in df_latest.columns else []:
+            sub_df = df_latest[df_latest['شركة'] == company]
+            st.write(f"### شركة {company}")
+            fig = px.bar(sub_df, x='Unified_ID', y='Overall_Score', text='Overall_Score')
+            fig.update_layout(xaxis=dict(autorange="reversed"), yaxis=dict(side="right"))
+            st.plotly_chart(fig, use_container_width=True)
 
-    with tab2:
-        st.subheader("المواقع الحالية")
-        cols = st.columns(6)
-        for idx, row in df_latest.iterrows():
+    elif page == "🏕️ خريطة المواقع":
+        cols = st.columns(6) 
+        for idx, (_, row) in enumerate(df_latest.iterrows()):
             with cols[idx % 6]:
-                st.button(f"{row['Unified_ID']}\n{row['Overall_Score']}%", key=f"site_{idx}")
+                if st.button(f"{row['Unified_ID']}\n{row['Overall_Score']}%", key=f"btn_{row['Unified_ID']}"):
+                    show_tent_details(row['Unified_ID'], df_full)
 
-    with tab3:
-        st.subheader("أداء المشرفين")
-        sup_perf = df_latest.groupby('Supervisor_Final')['Overall_Score'].mean().sort_values(ascending=False).reset_index()
-        st.table(sup_perf)
+    elif page == "🏗️ أداء المواقع":
+        show_sites_dashboard(df_full, df_latest)
 
 except Exception as e:
-    st.error(f"حدث خطأ في قراءة البيانات: {e}")
-    st.info("نصيحة: تأكد من أن الرابط المستخدم هو رابط Google Sheet بصيغة CSV وليس رابط Form.")
+    st.error(f"⚠️ خطأ في قراءة البيانات: {e}")
