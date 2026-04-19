@@ -131,9 +131,12 @@ def analyze_readiness(row, checklist_cols):
             scores.append(current_score)
             if current_score < 100: 
                 missing_items.append(f"{col} ({int(current_score)}%)")
-    return pd.Series([round(np.mean(scores)) if scores else 0, " | ".join(missing_items)])
+                
+    # إرجاع كمتغيرات عادية لتجنب خطأ الطول
+    final_score = round(np.mean(scores)) if scores else 0
+    final_missing = " | ".join(missing_items)
+    return final_score, final_missing
 
-# 🆕 تم تحديث الرابط وتحويله لصيغة التصدير كملف CSV
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1nfOahkHuUnWdsh40f0E3WvIUqTC4phKUxraGSOKyuUs/export?format=csv"
 
 @st.cache_data(ttl=20)
@@ -141,7 +144,7 @@ def load_data():
     df = pd.read_csv(SHEET_URL)
     df.columns = [col.strip().replace('\n', '') for col in df.columns]
     
-    # التعامل الديناميكي مع الأعمدة المكررة لمنع الأخطاء في حال تغير الأسماء
+    # التعامل الديناميكي مع الأعمدة
     sup_col1 = 'المراقب' if 'المراقب' in df.columns else df.columns[2]
     sup_col2 = 'المراقب .1' if 'المراقب .1' in df.columns else sup_col1
     id_col1 = 'رقم الشاخص' if 'رقم الشاخص' in df.columns else df.columns[5]
@@ -160,11 +163,22 @@ def load_data():
         df['dt_object'] = pd.to_datetime(df['temp_time'], errors='coerce')
         df = df.sort_values(by='dt_object', ascending=False)
     
-    # 🆕 الاستخراج الديناميكي لأسئلة التقييم لتجنب الاعتماد على "df.columns[7:37]"
+    # الاستخراج الديناميكي لأسئلة التقييم
     exclude_cols = ['طابع زمني', assistant_col, sup_col1, sup_col2, company_col, id_col1, id_col2, 'ملاحظات المراقب', 'temp_time', 'dt_object', 'Supervisor_Final', 'Unified_ID', 'Assistant_Name']
     checklist_cols = [c for c in df.columns if c not in exclude_cols]
     
-    df[['Overall_Score', 'Missing_Details']] = df.apply(lambda row: analyze_readiness(row, checklist_cols), axis=1)
+    # 🌟 الإصلاح الجذري لمشكلة "Columns must be same length as key"
+    scores_list = []
+    missing_list = []
+    for _, row in df.iterrows():
+        s, m = analyze_readiness(row, checklist_cols)
+        scores_list.append(s)
+        missing_list.append(m)
+        
+    df['Overall_Score'] = scores_list
+    df['Missing_Details'] = missing_list
+    # 🌟 انتهاء الإصلاح
+    
     df_latest = df.drop_duplicates(subset=['Unified_ID'], keep='first')
     return df, df_latest, checklist_cols
 
@@ -204,7 +218,6 @@ def show_tent_details(tent_id, full_df):
 def show_sites_dashboard(df_full, df_latest):
     st.markdown("<h2>📊 لوحة أداء المواقع</h2>", unsafe_allow_html=True)
 
-    # ===== حساب التقدم لكل موقع عبر الزمن =====
     sites_stats = []
     company_col = 'شركة' if 'شركة' in df_latest.columns else df_latest.columns[4]
     
@@ -227,7 +240,6 @@ def show_sites_dashboard(df_full, df_latest):
         max_score = max(scores_over_time)
         min_score = min(scores_over_time)
 
-        # تصنيف حالة التقدم
         if improvement > 10:
             trend = "📈 تحسن كبير"
             trend_color = "#10b981"
@@ -267,7 +279,6 @@ def show_sites_dashboard(df_full, df_latest):
 
     stats_df = stats_df.sort_values('الأداء الحالي', ascending=False)
 
-    # ===== المؤشرات الرئيسية =====
     total_sites = len(stats_df)
     avg_current = round(stats_df['الأداء الحالي'].mean(), 1)
     improved_sites = len(stats_df[stats_df['مقدار التحسن'] > 0])
@@ -286,13 +297,10 @@ def show_sites_dashboard(df_full, df_latest):
 
     st.divider()
 
-    # ===== التحليل الذكي والملاحظات =====
     st.markdown("<h3>🧠 تحليلات ذكية</h3>", unsafe_allow_html=True)
-
     insights_col1, insights_col2 = st.columns(2)
 
     with insights_col1:
-        # أفضل موقع متطور
         top_improved = stats_df.nlargest(1, 'مقدار التحسن').iloc[0] if not stats_df.empty else None
         if top_improved is not None and top_improved['مقدار التحسن'] > 0:
             st.markdown(f"""
@@ -303,7 +311,6 @@ def show_sites_dashboard(df_full, df_latest):
             </div>
             """, unsafe_allow_html=True)
 
-        # أفضل موقع حالياً
         best_now = stats_df.iloc[0]
         st.markdown(f"""
         <div class='high-achievement'>
@@ -312,7 +319,6 @@ def show_sites_dashboard(df_full, df_latest):
         </div>
         """, unsafe_allow_html=True)
 
-        # نسبة المواقع الممتازة
         excellence_rate = round((excellent_sites / total_sites * 100) if total_sites > 0 else 0, 1)
         st.markdown(f"""
         <div class='insight-box'>
@@ -322,7 +328,6 @@ def show_sites_dashboard(df_full, df_latest):
         """, unsafe_allow_html=True)
 
     with insights_col2:
-        # أكثر موقع تراجعاً
         top_declined = stats_df.nsmallest(1, 'مقدار التحسن').iloc[0] if not stats_df.empty else None
         if top_declined is not None and top_declined['مقدار التحسن'] < 0:
             st.markdown(f"""
@@ -333,7 +338,6 @@ def show_sites_dashboard(df_full, df_latest):
             </div>
             """, unsafe_allow_html=True)
 
-        # أقل موقع حالياً
         worst_now = stats_df.iloc[-1]
         st.markdown(f"""
         <div class='low-achievement'>
@@ -342,7 +346,6 @@ def show_sites_dashboard(df_full, df_latest):
         </div>
         """, unsafe_allow_html=True)
 
-        # إجمالي معدل التحسن
         avg_improvement = round(stats_df['مقدار التحسن'].mean(), 1)
         improvement_icon = "📈" if avg_improvement > 0 else "📉" if avg_improvement < 0 else "➖"
         st.markdown(f"""
@@ -354,11 +357,8 @@ def show_sites_dashboard(df_full, df_latest):
 
     st.divider()
 
-    # ===== الرسوم البيانية =====
     col_chart1, col_chart2 = st.columns(2)
-
     with col_chart1:
-        # مخطط الأداء الحالي لكل موقع
         fig = px.bar(
             stats_df, x='الموقع', y='الأداء الحالي',
             color='الأداء الحالي',
@@ -375,7 +375,6 @@ def show_sites_dashboard(df_full, df_latest):
         st.plotly_chart(fig, use_container_width=True)
 
     with col_chart2:
-        # مخطط التحسن (إيجابي/سلبي)
         improvement_df = stats_df.sort_values('مقدار التحسن', ascending=False)
         fig2 = px.bar(
             improvement_df, x='الموقع', y='مقدار التحسن',
@@ -393,7 +392,6 @@ def show_sites_dashboard(df_full, df_latest):
         )
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ===== مخطط التطور الزمني للمواقع =====
     st.markdown("<h3>📈 تطور أداء المواقع عبر الزمن</h3>", unsafe_allow_html=True)
 
     timeline_data = []
@@ -426,9 +424,7 @@ def show_sites_dashboard(df_full, df_latest):
         )
         st.plotly_chart(fig3, use_container_width=True)
 
-    # ===== توزيع حالات التقدم =====
     col_chart3, col_chart4 = st.columns(2)
-
     with col_chart3:
         trend_counts = stats_df['حالة التقدم'].value_counts().reset_index()
         trend_counts.columns = ['الحالة', 'العدد']
@@ -441,7 +437,6 @@ def show_sites_dashboard(df_full, df_latest):
         st.plotly_chart(fig4, use_container_width=True)
 
     with col_chart4:
-        # مقارنة أول تقييم vs الحالي
         compare_df = stats_df.head(15).melt(
             id_vars=['الموقع'],
             value_vars=['أول تقييم', 'الأداء الحالي'],
@@ -461,7 +456,6 @@ def show_sites_dashboard(df_full, df_latest):
         )
         st.plotly_chart(fig5, use_container_width=True)
 
-    # ===== جدول تفصيلي =====
     st.markdown("<h3>📋 تقرير تفصيلي للمواقع</h3>", unsafe_allow_html=True)
     display_df = stats_df[['الموقع', 'الشركة', 'الأداء الحالي', 'أول تقييم',
                             'مقدار التحسن', 'متوسط الأداء', 'أعلى أداء', 'أقل أداء',
