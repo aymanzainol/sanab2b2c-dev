@@ -2,223 +2,318 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. إعدادات الصفحة والتنسيق الجمالي
-st.set_page_config(page_title="جاهزية مخيمات عرفات 2026", layout="wide")
+# 1. إعدادات الصفحة والتنسيق
+st.set_page_config(page_title="لوحة قطاع المشاعر 2026 🚀", layout="wide")
 
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
     
-    .stApp { background-color: #0e1117; color: #ffffff; direction: rtl !important; }
-    h1, h2, h3, h4, .stMarkdown, p, span, label { 
-        text-align: right !important; 
+    .stApp { 
+        background-color: #0e1117; 
+        color: #ffffff; 
         direction: rtl !important; 
-        font-family: 'Cairo', sans-serif !important; 
     }
 
-    /* تنسيق أزرار المربعات (Tiles) */
-    div.stButton > button {
-        width: 100% !important;
+    h1, h2, h3, h4, h5, h6, .stMarkdown, p, span, label {
+        text-align: right !important;
+        direction: rtl !important;
+        font-family: 'Cairo', sans-serif !important;
+    }
+
+    div.stButton { display: flex; justify-content: flex-start; align-items: center; margin-bottom: 12px; }
+    .stButton > button {
+        width: 185px !important;
         height: 110px !important;
         border-radius: 15px !important; 
-        background: linear-gradient(145deg, #1f2937, #111827) !important;
+        background-color: #1f2937 !important;
         border: 2px solid #374151 !important; 
         color: white !important;
-        font-size: 1.1rem !important;
-        transition: all 0.3s ease;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
+        display: flex !important; 
+        flex-direction: column !important;
+        justify-content: center !important; 
+        align-items: center !important;
+        text-align: center !important; 
     }
-    div.stButton > button:hover { 
-        border-color: #3b82f6 !important; 
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+    .stButton > button:hover { border-color: #3b82f6 !important; transform: scale(1.05); }
+
+    .observer-notes-box {
+        background-color: #1e1e1e; padding: 20px; border-radius: 15px;
+        border-right: 6px solid #eab308; position: relative;
+        margin-bottom: 20px; color: #e5e7eb !important;
+        text-align: right !important;
+    }
+    
+    .score-circle {
+        position: absolute; left: 20px; top: 20px;
+        width: 75px; height: 75px; border-radius: 50%;
+        background: #111827; border: 4px solid #eab308;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: bold; font-size: 1.2rem; color: #eab308;
     }
 
-    .score-badge {
-        font-size: 0.9rem;
-        background: #374151;
-        padding: 2px 8px;
-        border-radius: 10px;
-        margin-top: 5px;
+    .checklist-item-popup { 
+        background-color: #450a0a; padding: 10px; border-radius: 8px; 
+        margin-bottom: 6px; border-right: 4px solid #ef4444; color: #fecaca !important;
+        text-align: right !important;
     }
-
-    /* بطاقات الإحصائيات */
+    
     .metric-card {
-        background: #1f2937;
-        padding: 20px;
+        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
         border-radius: 15px;
+        padding: 20px;
         border: 1px solid #374151;
         text-align: center;
+    }
+    
+    .metric-value {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #3b82f6;
+    }
+    
+    .metric-label {
+        font-size: 1rem;
+        color: #9ca3af;
+        margin-top: 5px;
+    }
+    
+    .high-achievement {
+        background: linear-gradient(135deg, #064e3b 0%, #065f46 100%);
+        border-radius: 12px;
+        padding: 15px;
+        border-right: 4px solid #10b981;
         margin-bottom: 10px;
     }
-    .metric-value { font-size: 2.5rem; font-weight: bold; color: #3b82f6; }
     
-    /* صندوق تفاصيل الموقع */
-    .details-box {
-        background-color: #1a1a1a;
-        padding: 20px;
-        border-radius: 15px;
-        border-right: 8px solid #3b82f6;
-        margin-bottom: 15px;
+    .low-achievement {
+        background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+        border-radius: 12px;
+        padding: 15px;
+        border-right: 4px solid #ef4444;
+        margin-bottom: 10px;
+    }
+
+    .insight-box {
+        background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+        border-radius: 12px;
+        padding: 15px;
+        border-right: 4px solid #3b82f6;
+        margin-bottom: 10px;
+        color: #dbeafe !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. معالجة البيانات وتحليل الجاهزية
+# 2. معالجة البيانات
 def analyze_readiness(row, checklist_cols):
     scores = []
     missing_items = []
     for col in checklist_cols:
-        val = str(row.get(col, '')).strip()
+        val = str(row[col]).strip()
         if not val or val.lower() == 'nan' or val == "": continue
-        
         current_score = None
-        # منطق التقييم: نعم أو رقم 1 يعني 100%، لا أو 0 يعني 0%
-        if any(p in val for p in ['نعم', 'مطابق', 'مكتمل', 'تم', '1.0', '1']): current_score = 100.0
-        elif any(n in val for n in ['لا', 'غير', 'لم', 'ناقص', '0.0', '0']): current_score = 0.0
-        
+        if "عدد" in col:
+            try:
+                num_val = float(val.replace('%', ''))
+                current_score = 100.0 if num_val >= 1 else 0.0
+            except: pass
+        if current_score is None:
+            if '%' in val:
+                try: current_score = float(val.replace('%', ''))
+                except: pass
+            elif any(p in val for p in ['نعم', 'مطابق', 'مكتمل', 'تم', 'يوجد', 'متوفر', 'جاهز', 'صح', '100']): current_score = 100.0
+            elif any(n in val for n in ['لا', 'غير', 'لم', 'ناقص', 'خطأ', '0']): current_score = 0.0
         if current_score is not None:
             scores.append(current_score)
-            if current_score < 100: missing_items.append(col)
-                
-    final_score = round(np.mean(scores)) if scores else 0
-    final_missing = " | ".join(missing_items)
-    return final_score, final_missing
+            if current_score < 100: 
+                missing_items.append(f"{col} ({int(current_score)}%)")
+    return pd.Series([round(np.mean(scores)) if scores else 0, " | ".join(missing_items)])
 
-# رابط الملف (تأكد من أنه متاح للجميع للعرض)
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1nfOahkHuUnWdsh40f0E3WvIUqTC4phKUxraGSOKyuUs/export?format=csv"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1pN31S92Xa4m-hilE-e56F9T6LuOhZLwPq6YWEnWP_xk/export?format=csv"
 
-@st.cache_data(ttl=30)
-def load_and_clean_data():
+@st.cache_data(ttl=20)
+def load_data():
     df = pd.read_csv(SHEET_URL)
-    # تنظيف أسماء الأعمدة من المسافات الزائدة
-    df.columns = [" ".join(col.split()) for col in df.columns]
+    df.columns = [col.strip().replace('\n', '') for col in df.columns]
+    df['Supervisor_Final'] = df['المراقب .1'].fillna(df['المراقب']).fillna("غير مسجل")
+    df['Unified_ID'] = np.where(df['شركة'].str.contains('ركين', na=False), df['رقم الشاخص'], df['رقم الشاخص .1'])
+    df['Unified_ID'] = df['Unified_ID'].fillna("غير معرف").astype(str).str.strip()
+    df['Assistant_Name'] = df['المعاون'].fillna("غير مسجل")
     
-    # 🌟 منطق التسمية المطلوب (F لسنا و G لركين)
-    def create_unified_id(row):
-        company = str(row.get('شركة', '')).lower()
-        id_sana = str(row.get('رقم الشاخص', ''))
-        id_rakeen = str(row.get('رقم الشاخص 2', ''))
-        
-        if 'سنا' in company and id_sana != 'nan':
-            return f"F-{id_sana}"
-        elif 'ركين' in company and id_rakeen != 'nan':
-            return f"G-{id_rakeen}"
-        return "غير معرف"
-
-    df['Unified_ID'] = df.apply(create_unified_id, axis=1)
-    df['Supervisor_Final'] = df['المراقب 2'].fillna(df['المراقب']).fillna("غير مسجل")
-    
-    # معالجة الوقت
     if 'طابع زمني' in df.columns:
-        df['dt_object'] = pd.to_datetime(df['طابع زمني'], errors='coerce')
+        df['temp_time'] = df['طابع زمني'].astype(str).str.replace('م', 'PM').str.replace('ص', 'AM')
+        df['dt_object'] = pd.to_datetime(df['temp_time'], errors='coerce')
         df = df.sort_values(by='dt_object', ascending=False)
     
-    # تحديد أعمدة الأسئلة (التي سيتم حساب النسبة بناءً عليها)
-    exclude = ['طابع زمني', 'المعاون', 'المراقب', 'المراقب 2', 'شركة', 'رقم الشاخص', 'رقم الشاخص 2', 'ملاحظات المراقب', 'Unified_ID', 'Supervisor_Final', 'dt_object']
-    checklist_cols = [c for c in df.columns if c not in exclude]
-    
-    # حساب النتائج
-    results = df.apply(lambda r: analyze_readiness(r, checklist_cols), axis=1)
-    df['Overall_Score'], df['Missing_Details'] = zip(*results)
-    
-    # أخذ أحدث تقييم لكل موقع فقط
+    checklist_cols = df.columns[7:37]
+    df[['Overall_Score', 'Missing_Details']] = df.apply(lambda row: analyze_readiness(row, checklist_cols), axis=1)
     df_latest = df.drop_duplicates(subset=['Unified_ID'], keep='first')
-    return df, df_latest
+    return df, df_latest, checklist_cols
 
-# 3. نافذة منبثقة لتفاصيل المخيم
-@st.dialog("تفاصيل جاهزية المخيم 🏕️")
-def show_tent_info(tent_id, full_df):
-    history = full_df[full_df['Unified_ID'] == tent_id].copy()
-    latest = history.iloc[0]
-    
-    st.markdown(f"### تفاصيل الموقع: {tent_id}")
+# 3. النافذة المنبثقة
+@st.dialog("تفاصيل جاهزية الموقع 🏕️")
+def show_tent_details(tent_id, full_df):
+    tent_history = full_df[full_df['Unified_ID'] == tent_id].copy()
+    st.markdown(f"<h2>موقع: {tent_id}</h2>", unsafe_allow_html=True)
+    history_options = tent_history['طابع زمني'].tolist()
+    selected_time = st.selectbox("🕒 عرض تقرير تاريخ:", history_options)
+    row = tent_history[tent_history['طابع زمني'] == selected_time].iloc[0]
+    score = int(row['Overall_Score'])
     
     st.markdown(f"""
-    <div class='details-box'>
-        <h2 style='color:#eab308; margin:0;'>{int(latest['Overall_Score'])}%</h2>
-        <p><b>الشركة:</b> {latest['شركة']}</p>
-        <p><b>المراقب:</b> {latest['Supervisor_Final']}</p>
-        <p><b>آخر تحديث:</b> {latest['طابع زمني']}</p>
-        <hr>
-        <p><b>ملاحظات المراقب:</b><br>{latest['ملاحظات المراقب'] if pd.notna(latest['ملاحظات المراقب']) else 'لا توجد ملاحظات'}</p>
+    <div class="observer-notes-box">
+        <div class="score-circle">{score}%</div>
+        <div>
+            <p><b>المعاون:</b> {row['Assistant_Name']}</p>
+            <p><b>المراقب:</b> {row['Supervisor_Final']}</p>
+            <hr>
+            <p><b>ملاحظات المراقب:</b></p>
+            <p>{row['ملاحظات المراقب'] if pd.notna(row['ملاحظات المراقب']) and str(row['ملاحظات المراقب']).strip() != "" else 'لا توجد ملاحظات.'}</p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
-    missing = str(latest['Missing_Details']).split('|')
-    if missing and missing[0] != "":
-        st.error("⚠️ قائمة النواقص:")
-        for item in missing:
-            st.write(f"❌ {item.strip()}")
-    else:
-        st.success("✅ الموقع مكتمل الجاهزية")
+    missing_list = [item.strip() for item in str(row['Missing_Details']).split('|') if item.strip()]
+    if missing_list:
+        st.markdown("<h3>⚠️ النواقص</h3>", unsafe_allow_html=True)
+        for item in missing_list:
+            st.markdown(f"<div class='checklist-item-popup'>❌ {item}</div>", unsafe_allow_html=True)
 
-# 4. بناء الواجهة الرئيسية
+# 4. داشبورد أداء المواقع
+def show_sites_dashboard(df_full, df_latest):
+    st.markdown("<h2>📊 لوحة أداء المواقع</h2>", unsafe_allow_html=True)
+
+    sites_stats = []
+    for site_id in df_latest['Unified_ID'].unique():
+        if site_id == "غير معرف":
+            continue
+        site_history = df_full[df_full['Unified_ID'] == site_id].copy()
+        if 'dt_object' in site_history.columns:
+            site_history = site_history.sort_values(by='dt_object', ascending=True)
+
+        scores_over_time = site_history['Overall_Score'].tolist()
+        if not scores_over_time:
+            continue
+
+        first_score = scores_over_time[0]
+        latest_score = scores_over_time[-1]
+        improvement = latest_score - first_score
+        num_inspections = len(scores_over_time)
+        avg_score = np.mean(scores_over_time)
+        max_score = max(scores_over_time)
+        min_score = min(scores_over_time)
+
+        if improvement > 10:
+            trend = "📈 تحسن كبير"
+        elif improvement > 0:
+            trend = "🔼 تحسن طفيف"
+        elif improvement == 0:
+            trend = "➖ ثابت"
+        elif improvement > -10:
+            trend = "🔽 تراجع طفيف"
+        else:
+            trend = "📉 تراجع كبير"
+
+        latest_row = site_history.iloc[-1]
+        sites_stats.append({
+            'الموقع': site_id,
+            'الشركة': latest_row['شركة'] if pd.notna(latest_row['شركة']) else "غير محدد",
+            'المراقب': latest_row['Supervisor_Final'],
+            'الأداء الحالي': latest_score,
+            'أول تقييم': first_score,
+            'مقدار التحسن': round(improvement, 1),
+            'متوسط الأداء': round(avg_score, 1),
+            'أعلى أداء': max_score,
+            'أقل أداء': min_score,
+            'عدد الزيارات': num_inspections,
+            'حالة التقدم': trend,
+        })
+
+    stats_df = pd.DataFrame(sites_stats)
+    if stats_df.empty:
+        st.warning("لا توجد بيانات كافية لعرض أداء المواقع.")
+        return
+
+    stats_df = stats_df.sort_values('الأداء الحالي', ascending=False)
+
+    total_sites = len(stats_df)
+    avg_current = round(stats_df['الأداء الحالي'].mean(), 1)
+    improved_sites = len(stats_df[stats_df['مقدار التحسن'] > 0])
+    declined_sites = len(stats_df[stats_df['مقدار التحسن'] < 0])
+    excellent_sites = len(stats_df[stats_df['الأداء الحالي'] >= 90])
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown(f'<div class="metric-card"><div class="metric-value">{total_sites}</div><div class="metric-label">إجمالي المواقع</div></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'<div class="metric-card"><div class="metric-value">{avg_current}%</div><div class="metric-label">متوسط الأداء العام</div></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown(f'<div class="metric-card"><div class="metric-value">{improved_sites}</div><div class="metric-label">مواقع تحسنت</div></div>', unsafe_allow_html=True)
+    with col4:
+        st.markdown(f'<div class="metric-card"><div class="metric-value">{declined_sites}</div><div class="metric-label">مواقع تراجعت</div></div>', unsafe_allow_html=True)
+
+    st.divider()
+
+    # رسوم بيانية
+    col_chart1, col_chart2 = st.columns(2)
+    with col_chart1:
+        fig = px.bar(stats_df, x='الموقع', y='الأداء الحالي',
+                     color='الأداء الحالي',
+                     color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'],
+                     title='الأداء الحالي لكل موقع', text='الأداء الحالي')
+        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white",
+                          xaxis=dict(autorange="reversed"), yaxis=dict(side="right"))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col_chart2:
+        improvement_df = stats_df.sort_values('مقدار التحسن', ascending=False)
+        fig2 = px.bar(improvement_df, x='الموقع', y='مقدار التحسن',
+                      color='مقدار التحسن',
+                      color_continuous_scale=['#ef4444', '#f59e0b', '#10b981'],
+                      color_continuous_midpoint=0,
+                      title='مقدار التحسن', text='مقدار التحسن')
+        fig2.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white",
+                           xaxis=dict(autorange="reversed"), yaxis=dict(side="right"))
+        st.plotly_chart(fig2, use_container_width=True)
+
+    st.markdown("<h3>📋 تقرير تفصيلي للمواقع</h3>", unsafe_allow_html=True)
+    st.dataframe(stats_df, use_container_width=True, hide_index=True)
+
+# 5. العرض الرئيسي
 try:
-    df_all, df_latest = load_and_clean_data()
-    
-    st.title("📊 لوحة متابعة جاهزية مخيمات عرفات")
-    st.info("يتم تحديث البيانات تلقائياً من Google Sheets")
+    df_full, df_latest, checklist_cols = load_data()
+    st.markdown("<h1>🚀 لوحة متابعة قطاع المشاعر</h1>", unsafe_allow_html=True)
+    page = st.radio("اختر العرض:", ["📊 التحليل العام", "🏕️ خريطة المواقع", "🏗️ أداء المواقع"], horizontal=True)
+    st.divider()
 
-    # بطاقات الإحصائيات العلوية
-    m1, m2, m3, m4 = st.columns(4)
-    with m1:
-        st.markdown(f'<div class="metric-card"><div class="metric-value">{len(df_latest)}</div><div>إجمالي المواقع</div></div>', unsafe_allow_html=True)
-    with m2:
-        avg = round(df_latest['Overall_Score'].mean())
-        st.markdown(f'<div class="metric-card"><div class="metric-value">{avg}%</div><div>متوسط الجاهزية العام</div></div>', unsafe_allow_html=True)
-    with m3:
-        ready = len(df_latest[df_latest['Overall_Score'] >= 90])
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#10b981">{ready}</div><div>مواقع جاهزة (+90%)</div></div>', unsafe_allow_html=True)
-    with m4:
-        low = len(df_latest[df_latest['Overall_Score'] < 50])
-        st.markdown(f'<div class="metric-card"><div class="metric-value" style="color:#ef4444">{low}</div><div>مواقع متأخرة (-50%)</div></div>', unsafe_allow_html=True)
-
-    # التبويبات
-    tab1, tab2 = st.tabs(["🏕️ خريطة المواقع (Tiles)", "📈 التحليل البياني"])
-
-    with tab1:
-        search = st.text_input("🔍 ابحث عن رقم شاخص (مثال: 518):", "")
-        
-        # تقسيم العرض حسب الشركة
-        for company_label, prefix in [("شركة سنا (F)", "F-"), ("شركة ركين (G)", "G-")]:
-            st.subheader(company_label)
-            sub_df = df_latest[df_latest['Unified_ID'].str.startswith(prefix)].sort_values('Unified_ID')
-            
-            if search:
-                sub_df = sub_df[sub_df['Unified_ID'].str.contains(search)]
-
+    if page == "📊 التحليل العام":
+        for company, color in [("سنا", "#b91c1c"), ("ركين", "#8b5e3c")]:
+            sub_df = df_latest[df_latest['شركة'].str.contains(company, na=False)]
+            st.markdown(f"<h3>{'🔴' if company=='سنا' else '🟤'} شركة {company}</h3>", unsafe_allow_html=True)
             if not sub_df.empty:
-                cols = st.columns(6) # 6 مربعات في الصف الواحد
-                for idx, (_, row) in enumerate(sub_df.iterrows()):
-                    with cols[idx % 6]:
-                        # لون الزر بناءً على النسبة
-                        score = row['Overall_Score']
-                        color = "#10b981" if score >= 90 else "#f59e0b" if score >= 50 else "#ef4444"
-                        
-                        btn_text = f"{row['Unified_ID']}\n{int(score)}%"
-                        if st.button(btn_text, key=f"btn_{row['Unified_ID']}"):
-                            show_tent_info(row['Unified_ID'], df_all)
-            else:
-                st.write("لا توجد بيانات لهذه الشركة حالياً.")
+                c1, c2 = st.columns([1, 4])
+                avg = round(sub_df['Overall_Score'].mean())
+                c1.metric("متوسط الإنجاز", f"{avg}%")
+                fig = px.bar(sub_df, x='Unified_ID', y='Overall_Score', color_discrete_sequence=[color], text='Overall_Score')
+                fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="white",
+                                  xaxis=dict(autorange="reversed"), yaxis=dict(side="right"))
+                c2.plotly_chart(fig, use_container_width=True)
 
-    with tab2:
-        col_a, col_b = st.columns(2)
-        with col_a:
-            fig1 = px.histogram(df_latest, x='Overall_Score', nbins=10, title="توزيع مستويات الجاهزية",
-                               labels={'Overall_Score': 'نسبة الجاهزية'}, color_discrete_sequence=['#3b82f6'])
-            st.plotly_chart(fig1, use_container_width=True)
-        
-        with col_b:
-            fig2 = px.box(df_latest, x='شركة', y='Overall_Score', title="مقارنة أداء الشركات",
-                         color='شركة', color_discrete_map={'سنا (مشارق الذهبية)': '#b91c1c', 'ركين (مشارق المتميزة)': '#1e3a8a'})
-            st.plotly_chart(fig2, use_container_width=True)
+    elif page == "🏕️ خريطة المواقع":
+        df_sorted = df_latest.sort_values(by=['شركة', 'Unified_ID'])
+        grid_cols = st.columns(6)
+        for idx, (_, row) in enumerate(df_sorted.iterrows()):
+            icon = "🔴" if "سنا" in str(row['شركة']) else "🟤"
+            with grid_cols[idx % 6]:
+                if st.button(f"{icon} {row['Unified_ID']}\n{row['Overall_Score']}%", key=f"btn_{row['Unified_ID']}"):
+                    show_tent_details(row['Unified_ID'], df_full)
+
+    elif page == "🏗️ أداء المواقع":
+        show_sites_dashboard(df_full, df_latest)
 
 except Exception as e:
-    st.error(f"خطأ في التحميل: {e}")
-    st.write("تأكد من أن الملف المرفوع يحتوي على الأعمدة المطلوبة.")
+    st.error(f"⚠️ خطأ: {e}")
